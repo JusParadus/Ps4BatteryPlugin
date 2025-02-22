@@ -53,34 +53,66 @@ void Ps4BatteryPlugin::pollBatteryStatus() {
 
     unsigned char buffer[64];
     int res = hid_read(controllerHandle, buffer, sizeof(buffer));
-    if (res > 12) {
-        int batteryLevel = buffer[12] & 0x0F;
-        int batteryLevelPercentage = (batteryLevel * 100) / 8;
 
+    if (res > 12) {
+        // Parse battery level and charging status
+        int batteryLevel = buffer[12] & 0x0F;  // Lower 4 bits = battery level
+        int chargingStatus = buffer[12] & 0xF0;  // Upper 4 bits = charging status
+
+        // Calculate battery percentage (0x0B = 11 = 100%)
+        int batteryLevelPercentage = (batteryLevel * 100) / 11;
+
+        // Log charging status
+        if (chargingStatus == 0x10 || chargingStatus == 0x20) {
+            cvarManager->log("Battery is charging.");
+        }
+        else {
+            cvarManager->log("Battery is not charging.");
+        }
+
+        // Log battery level
         std::string batteryMessage;
         switch (batteryLevel) {
-            case 0: batteryMessage = "Battery is empty!"; break;
-            case 1: batteryMessage = "Battery is very low!"; break;
-            case 2: batteryMessage = "Battery is low!"; break;
-            case 3: batteryMessage = "Battery is medium-low!"; break;
-            case 4: batteryMessage = "Battery is medium!"; break;
-            case 5: batteryMessage = "Battery is medium-high!"; break;
-            case 6: batteryMessage = "Battery is high!"; break;
-            case 7: batteryMessage = "Battery is full!"; break;
-            case 8: batteryMessage = "Battery is charging or fully charged!"; break;
-            default: batteryMessage = "Battery Level is not in known range!"; break;
+            case 0x00: batteryMessage = "Battery is empty!"; break;
+            case 0x01: batteryMessage = "Battery is very low!"; break;
+            case 0x02: batteryMessage = "Battery is low!"; break;
+            case 0x03: batteryMessage = "Battery is medium-low!"; break;
+            case 0x04: batteryMessage = "Battery is medium!"; break;
+            case 0x05: batteryMessage = "Battery is medium-high!"; break;
+            case 0x06: batteryMessage = "Battery is high!"; break;
+            case 0x07: batteryMessage = "Battery is very high!"; break;
+            case 0x08: batteryMessage = "Battery is almost full!"; break;
+            case 0x09: batteryMessage = "Battery is full!"; break;
+            case 0x0A: batteryMessage = "Battery is fully charged!"; break;
+            case 0x0B: batteryMessage = "Battery is fully charged!"; break;
+            default: batteryMessage = "Battery level is unknown!"; break;
         }
 
         cvarManager->log(batteryMessage);
         cvarManager->log("Battery Level: " + std::to_string(batteryLevelPercentage) + "%");
     }
     else {
-        cvarManager->log("No battery data received.");
+        // If no data is received, try sending a feature report (for Bluetooth mode)
+        unsigned char request[78] = { 0x05, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+        if (hid_send_feature_report(controllerHandle, request, sizeof(request))) {
+            cvarManager->log("Failed to send feature report.");
+            return;
+        }
+
+        // Read the response
+        res = hid_read(controllerHandle, buffer, sizeof(buffer));
+            if (res > 0) {
+                // Parse battery level from the response (Bluetooth mode)
+                int batteryLevel = buffer[1];  // Battery level is in the second byte
+                int batteryLevelPercentage = (batteryLevel * 100) / 11;
+
+                cvarManager->log("Battery Level (Bluetooth): " + std::to_string(batteryLevelPercentage) + "%");
+            }
+            else {
+                cvarManager->log("No battery data received.");
+            }
     }
 
-    // Display the battery percentage in Rocket League
-    // You can use BakkesMod's drawing functions to display this on the screen
-
-    // Reschedule the pollBatteryStatus function to be called again after X second
-	gameWrapper->SetTimeout([this](GameWrapper*) { pollBatteryStatus(); }, 10.0f);  // 60.of = 60 seconds (1 minute)
+    // Reschedule the pollBatteryStatus function to be called again after 10 seconds
+    gameWrapper->SetTimeout([this](GameWrapper*) { pollBatteryStatus(); }, 10.0f);
 }
