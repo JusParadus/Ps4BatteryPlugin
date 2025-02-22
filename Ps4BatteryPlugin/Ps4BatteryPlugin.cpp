@@ -2,51 +2,64 @@
 #include "Ps4BatteryPlugin.h"
 
 
-BAKKESMOD_PLUGIN(Ps4BatteryPlugin, "write a plugin description here", plugin_version, PLUGINTYPE_FREEPLAY)
+BAKKESMOD_PLUGIN(Ps4BatteryPlugin, "PS4 Battery Plugin", plugin_version, PLUGINTYPE_FREEPLAY)
 
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
 
 void Ps4BatteryPlugin::onLoad() {
 	_globalCvarManager = cvarManager;
-	//LOG("Plugin loaded!");
-	// !! Enable debug logging by setting DEBUG_LOG = true in logging.h !!
-	//DEBUGLOG("Ps4BatteryPlugin debug mode enabled");
+	LOG("Plugin loaded!");
+	//!! Enable debug logging by setting DEBUG_LOG = true in logging.h !!
+	DEBUGLOG("Ps4BatteryPlugin debug mode enabled");
 
-	// LOG and DEBUGLOG use fmt format strings https://fmt.dev/latest/index.html
-	//DEBUGLOG("1 = {}, 2 = {}, pi = {}, false != {}", "one", 2, 3.14, true);
+    // Initialize hidapi
+    if (hid_init() == 0) {
+        cvarManager->log("hidapi initialized.");
+    }
+    else {
+        const wchar_t* error = hid_error(NULL);
+        cvarManager->log(L"hidapi initialization failed: " + std::wstring(error));
+        return;
+    }
 
-	//cvarManager->registerNotifier("my_aweseome_notifier", [&](std::vector<std::string> args) {
-	//	LOG("Hello notifier!");
-	//}, "", 0);
+    // Open the PS4 controller
+    controllerHandle = hid_open(0x054c, 0x09cc, NULL);
+    if (controllerHandle) {
+        cvarManager->log("PS4 controller opened.");
+    }
+    else {
+        cvarManager->log("Failed to open PS4 controller.");
+    }
 
-	//auto cvar = cvarManager->registerCvar("template_cvar", "hello-cvar", "just a example of a cvar");
-	//auto cvar2 = cvarManager->registerCvar("template_cvar2", "0", "just a example of a cvar with more settings", true, true, -10, true, 10 );
-
-	//cvar.addOnValueChanged([this](std::string cvarName, CVarWrapper newCvar) {
-	//	LOG("the cvar with name: {} changed", cvarName);
-	//	LOG("the new value is: {}", newCvar.getStringValue());
-	//});
-
-	//cvar2.addOnValueChanged(std::bind(&Ps4BatteryPlugin::YourPluginMethod, this, _1, _2));
-
-	// enabled decleared in the header
-	//enabled = std::make_shared<bool>(false);
-	//cvarManager->registerCvar("TEMPLATE_Enabled", "0", "Enable the TEMPLATE plugin", true, true, 0, true, 1).bindTo(enabled);
-
-	//cvarManager->registerNotifier("NOTIFIER", [this](std::vector<std::string> params){FUNCTION();}, "DESCRIPTION", PERMISSION_ALL);
-	//cvarManager->registerCvar("CVAR", "DEFAULTVALUE", "DESCRIPTION", true, true, MINVAL, true, MAXVAL);//.bindTo(CVARVARIABLE);
-	//gameWrapper->HookEvent("FUNCTIONNAME", std::bind(&TEMPLATE::FUNCTION, this));
-	//gameWrapper->HookEventWithCallerPost<ActorWrapper>("FUNCTIONNAME", std::bind(&Ps4BatteryPlugin::FUNCTION, this, _1, _2, _3));
-	//gameWrapper->RegisterDrawable(bind(&TEMPLATE::Render, this, std::placeholders::_1));
-
-
-	//gameWrapper->HookEvent("Function TAGame.Ball_TA.Explode", [this](std::string eventName) {
-	//	LOG("Your hook got called and the ball went POOF");
-	//});
-	// You could also use std::bind here
-	//gameWrapper->HookEvent("Function TAGame.Ball_TA.Explode", std::bind(&Ps4BatteryPlugin::YourPluginMethod, this);
+    // Set up a timer to poll the battery status periodically
+    gameWrapper->SetTimeout([this](GameWrapper*) { pollBatteryStatus(); }, 1.0f);
 }
 
 void Ps4BatteryPlugin::onUnload() {
 	LOG("Plugin unloaded!");
+
+    // Close the controller handle
+    if (controllerHandle) {
+        hid_close(controllerHandle);
+        controllerHandle = nullptr;
+    }
+
+    // Finalize hidapi
+    hid_exit();
+}
+
+void Ps4BatteryPlugin::pollBatteryStatus() {
+    if (controllerHandle) {
+        unsigned char buf[256];
+        int res = hid_read(controllerHandle, buf, sizeof(buf));
+        if (res > 0) {
+            // Parse the battery status from buf
+            // This is a placeholder for actual parsing logic
+            int batteryLevel = buf[30]; // Example: battery level might be at index 30
+            cvarManager->log("Battery Level: " + std::to_string(batteryLevel) + "%");
+
+            // Display the battery percentage in Rocket League
+            // You can use BakkesMod's drawing functions to display this on the screen
+        }
+    }
 }
