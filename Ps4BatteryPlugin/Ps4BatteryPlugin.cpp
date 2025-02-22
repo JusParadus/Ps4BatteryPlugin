@@ -51,15 +51,15 @@ void Ps4BatteryPlugin::onUnload() {
 void Ps4BatteryPlugin::pollBatteryStatus() {
     if (!controllerHandle) return;
 
-    unsigned char buffer[64];
+    unsigned char buffer[78];  // Use a 78-byte buffer for feature reports
     int res = hid_read(controllerHandle, buffer, sizeof(buffer));
 
     if (res > 12) {
-        // Parse battery level and charging status
+        // USB Mode: Parse battery level from byte 12
         int batteryLevel = buffer[12] & 0x0F;  // Lower 4 bits = battery level
-        int chargingStatus = buffer[12] & 0xF0;  // Upper 4 bits = charging status
+		int chargingStatus = buffer[12] & 0xF0;  // Upper 4 bits = charging status
 
-        // Calculate battery percentage (0x0B = 11 = 100%)
+        // Calculate battery percentage
         int batteryLevelPercentage = (batteryLevel * 100) / 11;
 
         // Log charging status
@@ -92,27 +92,27 @@ void Ps4BatteryPlugin::pollBatteryStatus() {
         cvarManager->log("Battery Level: " + std::to_string(batteryLevelPercentage) + "%");
     }
     else {
-        // If no data is received, try sending a feature report (for Bluetooth mode)
+        // Bluetooth Mode: Send a feature report to request battery data
         unsigned char request[78] = { 0x05, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        if (hid_send_feature_report(controllerHandle, request, sizeof(request))) {
+        if (hid_send_feature_report(controllerHandle, request, sizeof(request)) < 0) {
             cvarManager->log("Failed to send feature report.");
             return;
         }
 
         // Read the response
         res = hid_read(controllerHandle, buffer, sizeof(buffer));
-            if (res > 0) {
-                // Parse battery level from the response (Bluetooth mode)
-                int batteryLevel = buffer[1];  // Battery level is in the second byte
-                int batteryLevelPercentage = (batteryLevel * 100) / 11;
+        if (res > 0) {
+            // Parse battery level from byte 1
+            int batteryLevel = buffer[1] & 0x0F;
+            int batteryLevelPercentage = (batteryLevel * 100) / 11;
 
-                cvarManager->log("Battery Level (Bluetooth): " + std::to_string(batteryLevelPercentage) + "%");
-            }
-            else {
-                cvarManager->log("No battery data received.");
-            }
+            cvarManager->log("Battery Level (Bluetooth): " + std::to_string(batteryLevelPercentage) + "%");
+        }
+        else {
+            cvarManager->log("No battery data received.");
+        }
     }
 
-    // Reschedule the pollBatteryStatus function to be called again after 10 seconds
+    // Reschedule the pollBatteryStatus function
     gameWrapper->SetTimeout([this](GameWrapper*) { pollBatteryStatus(); }, 10.0f);
 }
