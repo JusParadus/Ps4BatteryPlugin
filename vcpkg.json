@@ -1,0 +1,6 @@
+{
+	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkgtool/main/docs/vcpkg.schema.json",
+	"dependencies": [
+		"hidapi"
+	]
+}

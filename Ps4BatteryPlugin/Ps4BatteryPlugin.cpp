@@ -6,8 +6,7 @@ BAKKESMOD_PLUGIN(Ps4BatteryPlugin, "write a plugin description here", plugin_ver
 
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
 
-void Ps4BatteryPlugin::onLoad()
-{
+void Ps4BatteryPlugin::onLoad() {
 	_globalCvarManager = cvarManager;
 	//LOG("Plugin loaded!");
 	// !! Enable debug logging by setting DEBUG_LOG = true in logging.h !!
@@ -46,4 +45,8 @@ void Ps4BatteryPlugin::onLoad()
 	//});
 	// You could also use std::bind here
 	//gameWrapper->HookEvent("Function TAGame.Ball_TA.Explode", std::bind(&Ps4BatteryPlugin::YourPluginMethod, this);
+}
+
+void Ps4BatteryPlugin::onUnload() {
+	LOG("Plugin unloaded!");
 }
